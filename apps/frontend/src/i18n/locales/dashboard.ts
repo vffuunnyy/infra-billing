@@ -9,6 +9,12 @@ export const dashboard = {
       currentMonthPayments: 'Payments this month',
       totalSpent: 'Total spent',
     },
+    filter: {
+      projects: 'Projects',
+      search: 'Search projects…',
+      empty: 'Nothing found',
+      clear: 'Clear',
+    },
     critical: {
       title: 'Critical: balance may not cover the charge in ≤7 days',
       serviceLead: 'Service',
@@ -86,6 +92,12 @@ export const dashboard = {
       yearly: 'Прогноз в год',
       currentMonthPayments: 'Платежи в этом месяце',
       totalSpent: 'Всего потрачено',
+    },
+    filter: {
+      projects: 'Проекты',
+      search: 'Поиск проектов…',
+      empty: 'Ничего не найдено',
+      clear: 'Сбросить',
     },
     critical: {
       title: 'Критично: баланс может не покрыть списание в ≤7 дней',
