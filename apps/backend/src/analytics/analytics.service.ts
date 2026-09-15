@@ -10,7 +10,7 @@ import { ServicesRepository } from '@repositories/services/services.repository';
 import { SettingsRepository } from '@repositories/settings/settings.repository';
 import { CurrencyService } from '../currency/currency.service';
 import { chargeSeverity } from '@common/billing-severity';
-import { monthlyCost } from '@common/money';
+import { isMeteredPeriod, monthlyCost } from '@common/money';
 import { overdueDays } from '@common/overdue';
 import { burnFromMonthlyCost, burnFromSnapshots, daysOfRunway } from '@common/runway';
 import { type AnalyticsScope, relevantProviderUuids, UNRESTRICTED } from './scope.util';
@@ -138,11 +138,14 @@ export class AnalyticsService {
     const today = now.startOf('day');
     // Services billing within 14 days, sorted soonest-first. Deliberately unscoped: a provider's
     // balance is shared by all projects, so coverage must be simulated over every charge on it —
-    // only the emitted rows below are scope-filtered.
+    // only the emitted rows below are scope-filtered. Metered (daily/hourly) services are
+    // skipped: their "next billing" is just the paid-until date sliding forward every day, not a
+    // charge to prepare for — otherwise every such service would be "upcoming" every single day.
     const upcomingSorted = services
       .filter(
         (s) =>
           s.nextBillingAt &&
+          !isMeteredPeriod(s.period as Period) &&
           dayjs(s.nextBillingAt).isAfter(now) &&
           dayjs(s.nextBillingAt).isBefore(horizon),
       )
@@ -256,9 +259,12 @@ export class AnalyticsService {
       balanceTopUps.sort((a, b) => new Decimal(b.amount).cmp(new Decimal(a.amount)));
     }
 
-    // Dated charges already in the past: pay-or-fix reminders, most overdue first.
+    // Dated charges already in the past: pay-or-fix reminders, most overdue first. Metered
+    // services can't be overdue — the paid-until date passing at night merely means the next
+    // sync hasn't refreshed it yet, and a real shortfall surfaces as the provider's runway.
     const overdueBillings: AnalyticsSummary['overdueBillings'] = [];
     for (const s of scopedServices) {
+      if (isMeteredPeriod(s.period as Period)) continue;
       const daysOverdue = overdueDays(s.nextBillingAt, now);
       if (daysOverdue == null) continue;
       const provider = providerByUuid.get(s.providerUuid);
@@ -292,8 +298,13 @@ export class AnalyticsService {
     if (scope.includeBalances) {
       // All services, not scoped ones: dated billing anywhere means the provider's spend is
       // covered by the upcoming simulation, and a filter must not flip it into runway.
+      // Metered services don't count as dated: their balance drain is exactly what runway measures.
+      // Known simplification: a provider mixing metered and monthly dated services stays on the
+      // dated path, and the metered drain is not folded into the running-balance coverage.
       const datedProviderUuids = new Set(
-        services.filter((s) => s.nextBillingAt != null).map((s) => s.providerUuid),
+        services
+          .filter((s) => s.nextBillingAt != null && !isMeteredPeriod(s.period as Period))
+          .map((s) => s.providerUuid),
       );
       const runwayWindowStart = now.subtract(30, 'day').toDate();
       const snapshots = await this.snapshotsRepo.listSince(runwayWindowStart);
