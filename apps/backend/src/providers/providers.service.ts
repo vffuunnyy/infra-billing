@@ -295,6 +295,7 @@ export class ProvidersService {
       data.balanceCurrency = dto.balanceCurrency;
       data.balanceSyncedAt = new Date();
     }
+    if (dto.isEnabled !== undefined) data.isEnabled = dto.isEnabled;
     // Merge onto existing credentials so a partial edit works, e.g. adding only a TOTP
     // secret to an existing BILLmanager provider without re-entering the password.
     const creds = this.buildCredentials(existing.kind, dto, existing.credentialsEnc);

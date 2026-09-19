@@ -29,6 +29,7 @@ export function mapProvider(
     balanceCurrency: p.balanceCurrency,
     isPostpaid: p.isPostpaid,
     manualBalance: p.manualBalance,
+    isEnabled: p.isEnabled,
     balanceSyncedAt: dateToIso(p.balanceSyncedAt),
     lastSyncAt: dateToIso(p.lastSyncAt),
     lastSyncError: p.lastSyncError,

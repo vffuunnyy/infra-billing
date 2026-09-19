@@ -14,6 +14,7 @@ export const providers = {
       sync: 'Sync',
     },
     syncError: 'error',
+    badgeDisabled: 'disabled',
     balanceHistory: {
       tooltip: 'Balance history',
       title: 'Balance history · {{name}}',
@@ -46,6 +47,10 @@ export const providers = {
       runwayValue_other: '{{count}} days (until {{date}})',
       burnPerDay: 'Spend per day',
       openLk: 'Open control panel',
+      enable: 'Enable',
+      disable: 'Disable',
+      syncDisabled:
+        'Sync is off — the provider is disabled. Services and balance stay as they are.',
     },
     field: {
       name: 'Name',
@@ -177,6 +182,8 @@ export const providers = {
     },
     created: 'Provider created',
     updated: 'Provider updated',
+    enabledToast: 'Provider "{{name}}" enabled',
+    disabledToast: 'Provider "{{name}}" disabled — it will not be synced',
     syncedAll: 'Providers synced: {{count}}',
     syncedMixed: 'Sync: {{ok}} ok, {{failed}} failed',
     syncedOne: 'Sync: services {{count}}',
@@ -197,6 +204,7 @@ export const providers = {
       sync: 'Синхронизация',
     },
     syncError: 'ошибка',
+    badgeDisabled: 'отключён',
     balanceHistory: {
       tooltip: 'История баланса',
       title: 'История баланса · {{name}}',
@@ -231,6 +239,10 @@ export const providers = {
       runwayValue_other: '{{count}} дня (до {{date}})',
       burnPerDay: 'Расход в день',
       openLk: 'Открыть ЛК',
+      enable: 'Включить',
+      disable: 'Отключить',
+      syncDisabled:
+        'Синхронизация выключена — провайдер отключён. Сервисы и баланс остаются как есть.',
     },
     field: {
       name: 'Имя',
@@ -365,6 +377,8 @@ export const providers = {
     },
     created: 'Провайдер создан',
     updated: 'Провайдер обновлён',
+    enabledToast: 'Провайдер «{{name}}» включён',
+    disabledToast: 'Провайдер «{{name}}» отключён — синхронизироваться не будет',
     syncedAll: 'Синхронизировано провайдеров: {{count}}',
     syncedMixed: 'Синхронизация: {{ok}} ок, {{failed}} с ошибкой',
     syncedOne: 'Синхронизация: сервисов {{count}}',

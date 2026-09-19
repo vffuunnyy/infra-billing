@@ -25,6 +25,9 @@ export const providerSchema = z.object({
   isPostpaid: z.boolean().describe('Invoice-billed / postpaid'),
   // Balance kept by the owner and drained by the panel (hourly/daily services, journal payments).
   manualBalance: z.boolean().describe('Hand-maintained balance'),
+  // Owner switch: false stops autosync, "Sync all" and manual sync. Services, balance and
+  // analytics are untouched — the provider is only muted in the UI.
+  isEnabled: z.boolean().describe('Sync enabled'),
   balanceSyncedAt: isoDateSchema.describe('Balance update time').nullable(),
   lastSyncAt: isoDateSchema.describe('Last successful sync').nullable(),
   lastSyncError: z.string().describe('Last sync error').nullable(),
@@ -108,6 +111,7 @@ export const updateProviderSchema = z.object({
   manualBalance: z.boolean().describe('Hand-maintained balance').optional(),
   balance: moneySchema.describe('Balance as of now').optional(),
   balanceCurrency: currencySchema.describe('Balance currency').optional(),
+  isEnabled: z.boolean().describe('Sync enabled').optional(),
   ...credentialFields,
 });
 export type UpdateProvider = z.infer<typeof updateProviderSchema>;
