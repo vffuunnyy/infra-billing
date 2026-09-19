@@ -25,6 +25,10 @@ import {
 import { API, API_SUB, CONTROLLERS_INFO, ID_PARAM } from '@infra/shared';
 import { Response } from 'express';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { AnyPrincipal } from '../auth/any-principal.decorator';
+import type { Principal } from '../auth/principal';
+import { CurrentPrincipal } from '../auth/principal.decorator';
+import { RequirePerm } from '../auth/require-perm.decorator';
 import { FaviconsService } from '../favicons/favicons.service';
 import { ProjectsService } from './projects.service';
 import {
@@ -46,10 +50,11 @@ export class ProjectsController {
   ) {}
 
   @Get()
+  @AnyPrincipal()
   @ApiOperation({ summary: 'List projects' })
   @ApiOkResponse({ type: [ProjectDto] })
-  list() {
-    return this.projects.list();
+  list(@CurrentPrincipal() principal: Principal) {
+    return this.projects.list(principal);
   }
 
   @Post()
@@ -68,6 +73,7 @@ export class ProjectsController {
   }
 
   @Get(API_SUB.FAVICON)
+  @AnyPrincipal()
   @ApiOperation({ summary: 'Project favicon (proxied, cached)' })
   @ApiProduces('image/*')
   @ApiOkResponse({ description: 'Favicon image', schema: { type: 'string', format: 'binary' } })
@@ -91,9 +97,13 @@ export class ProjectsController {
   }
 
   @Get(API_SUB.PROJECT_STATS)
+  @RequirePerm('dashboard:read')
   @ApiOperation({ summary: 'Get cost statistics for a project' })
   @ApiOkResponse({ type: ProjectStatsDto })
-  stats(@Param(ID_PARAM, ParseUUIDPipe) uuid: string) {
+  stats(@Param(ID_PARAM, ParseUUIDPipe) uuid: string, @CurrentPrincipal() principal: Principal) {
+    if (principal.kind === 'member' && !principal.projectUuids.includes(uuid)) {
+      throw new NotFoundException('Project not found');
+    }
     return this.analytics.projectStats(uuid);
   }
 

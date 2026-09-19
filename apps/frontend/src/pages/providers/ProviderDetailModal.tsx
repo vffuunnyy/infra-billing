@@ -38,7 +38,7 @@ interface ProviderDetailModalProps {
   isSyncing: boolean;
   isToggling: boolean;
   onSubmit: FormEventHandler<HTMLFormElement>;
-  onSync: (uuid: string) => void;
+  onSync?: (uuid: string) => void;
   onToggleEnabled: (p: Provider) => void;
   onDelete: (p: Provider) => void;
   onClose: () => void;
@@ -251,7 +251,7 @@ export function ProviderDetailModal({
                 />
               </section>
 
-              {shown.kind !== 'manual' && (
+              {shown.kind !== 'manual' && onSync && (
                 <SyncPanel provider={shown} isSyncing={isSyncing} onSync={onSync} />
               )}
 

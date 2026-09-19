@@ -1,6 +1,7 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
 import { API, API_SUB, CONTROLLERS_INFO, ID_PARAM } from '@infra/shared';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { RequirePerm } from '../auth/require-perm.decorator';
 import { AnalyticsService } from './analytics.service';
 import { BalanceHistoryQueryDto, BalancePointDto, ProviderRunwayDto } from './dto/analytics.dto';
 
@@ -10,9 +11,10 @@ import { BalanceHistoryQueryDto, BalancePointDto, ProviderRunwayDto } from './dt
 export class BalanceHistoryController {
   constructor(private readonly analytics: AnalyticsService) {}
 
+  @Get(API_SUB.PROVIDER_BALANCE_HISTORY)
+  @RequirePerm('providers:read')
   @ApiOperation({ summary: 'Get provider balance history' })
   @ApiOkResponse({ type: [BalancePointDto] })
-  @Get(API_SUB.PROVIDER_BALANCE_HISTORY)
   history(@Param(ID_PARAM, ParseUUIDPipe) uuid: string, @Query() query: BalanceHistoryQueryDto) {
     return this.analytics.balanceHistory(uuid, query.from, query.to);
   }
@@ -20,6 +22,7 @@ export class BalanceHistoryController {
   @ApiOperation({ summary: 'Estimate how long the provider balance lasts at current spend' })
   @ApiOkResponse({ type: ProviderRunwayDto })
   @Get(API_SUB.PROVIDER_RUNWAY)
+  @RequirePerm('providers:read')
   runway(@Param(ID_PARAM, ParseUUIDPipe) uuid: string) {
     return this.analytics.providerRunway(uuid);
   }
