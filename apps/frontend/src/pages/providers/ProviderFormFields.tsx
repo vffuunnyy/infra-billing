@@ -1,3 +1,4 @@
+import { providerKindAllowsManualBalance } from '@infra/shared';
 import { IconKey, IconServer2 } from '@tabler/icons-react';
 import { Controller, type UseFormReturn } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +8,8 @@ import { DEFAULT_ICON_BG, resolveTablerIcon } from '@/components/tablerIconCatal
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { CURRENCY_OPTIONS } from '@/constants';
+import { trimMoney } from '@/utils/format';
 import {
   Select,
   SelectContent,
@@ -48,6 +51,8 @@ export function ProviderFormFields({
   const previewName = form.watch('name');
   const iconName = form.watch('iconName');
   const iconBg = form.watch('iconBg');
+  const manualBalance = form.watch('manualBalance');
+  const balanceError = form.formState.errors.balance;
   const HeaderIcon = resolveTablerIcon(iconName) ?? IconServer2;
   return (
     <>
@@ -154,6 +159,85 @@ export function ProviderFormFields({
             </div>
           )}
         />
+        {providerKindAllowsManualBalance(kind) && (
+          <>
+            <Controller
+              control={form.control}
+              name="manualBalance"
+              render={({ field }) => (
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    id="provider-manual-balance"
+                    checked={field.value}
+                    onCheckedChange={(c) => field.onChange(c === true)}
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="provider-manual-balance">
+                      {t('providers.field.manualBalance')}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {t('providers.field.manualBalanceDesc')}
+                    </p>
+                  </div>
+                </div>
+              )}
+            />
+            {manualBalance && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="min-w-0 space-y-2">
+                  <Label htmlFor="provider-balance">
+                    {t('providers.field.balance')} <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="provider-balance"
+                    inputMode="decimal"
+                    aria-invalid={balanceError ? true : undefined}
+                    {...form.register('balance', {
+                      validate: (v) => {
+                        if (!form.getValues('manualBalance')) return true;
+                        if (!v.trim()) return t('providers.err.balanceRequired');
+                        return /^-?\d+(\.\d{1,2})?$/.test(v.trim())
+                          ? true
+                          : t('providers.err.balanceFormat');
+                      },
+                      onBlur: (e) =>
+                        form.setValue('balance', trimMoney(e.target.value), {
+                          shouldDirty: true,
+                        }),
+                    })}
+                  />
+                  {balanceError && (
+                    <p className="text-xs text-destructive">{balanceError.message}</p>
+                  )}
+                </div>
+                <div className="min-w-0 space-y-2">
+                  <Label htmlFor="provider-balance-currency">
+                    {t('providers.field.balanceCurrency')}
+                  </Label>
+                  <Controller
+                    control={form.control}
+                    name="balanceCurrency"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger id="provider-balance-currency" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CURRENCY_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </FormSection>
 
       {/* Manual providers have no credentials — skip the empty section shell. */}

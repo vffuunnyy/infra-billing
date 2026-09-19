@@ -38,7 +38,7 @@ export class ProvidersRepository {
   findCredentials(uuid: string) {
     return this.prisma.provider.findUnique({
       where: { uuid },
-      select: { kind: true, credentialsEnc: true },
+      select: { kind: true, credentialsEnc: true, manualBalance: true },
     });
   }
 
@@ -66,6 +66,14 @@ export class ProvidersRepository {
     await this.prisma.provider.update({
       where: { uuid },
       data: { balance, balanceCurrency: currency, balanceSyncedAt: new Date() },
+    });
+  }
+
+  /** Balance adjustment that is not an accrual point: `balanceSyncedAt` stays where it was. */
+  async setBalance(uuid: string, balance: string, currency: string): Promise<void> {
+    await this.prisma.provider.update({
+      where: { uuid },
+      data: { balance, balanceCurrency: currency },
     });
   }
 

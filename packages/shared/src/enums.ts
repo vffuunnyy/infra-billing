@@ -53,6 +53,28 @@ export function providerKindSupportsPaymentImport(kind: string): boolean {
   return paymentImportKindSet.has(kind);
 }
 
+/**
+ * Connector kinds whose `fetchAccount` can return `balance: null` (no balance API, or one that
+ * needs an optional credential). Together with `manual` these may keep a balance by hand.
+ */
+export const PROVIDER_KINDS_WITHOUT_BALANCE_API = [
+  'hetzner',
+  'hostkey',
+  'netcup',
+  'stormwall',
+  'spaceship',
+  'beget',
+  'cloudflare',
+  'yandex',
+] as const satisfies readonly ProviderKind[];
+
+const manualBalanceKindSet = new Set<string>(['manual', ...PROVIDER_KINDS_WITHOUT_BALANCE_API]);
+
+/** Whether a provider of this kind may keep a hand-maintained, panel-debited balance. */
+export function providerKindAllowsManualBalance(kind: string): boolean {
+  return manualBalanceKindSet.has(kind);
+}
+
 /** Built-in presets shown in pickers. API also accepts custom labels (GitLab-style). */
 export const SERVICE_TYPES = [
   'vps',

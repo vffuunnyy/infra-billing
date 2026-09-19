@@ -20,7 +20,7 @@ import { useEnums } from '@/constants';
 import { useDisclosure } from '@/hooks/useDisclosure';
 import { useSelectedParam } from '@/hooks/useSelectedParam';
 import { sortRows, useTableSort } from '@/hooks/useTableSort';
-import { formatDate } from '@/utils/format';
+import { formatDate, trimMoney } from '@/utils/format';
 import { buildRubMap } from '@/utils/money';
 import { notifyError, notifySuccess } from '@/utils/notify';
 import { ProviderDetailModal } from './ProviderDetailModal';
@@ -63,7 +63,7 @@ export function ProvidersPage() {
   const form = useForm<FormValues>({ defaultValues: EMPTY_FORM, mode: 'onSubmit' });
 
   const openCreate = () => {
-    form.reset({ ...EMPTY_FORM });
+    form.reset({ ...EMPTY_FORM, balanceCurrency: settings?.baseCurrency ?? 'RUB' });
     openCreateModal();
   };
   const openDetail = (p: Provider) => {
@@ -81,6 +81,9 @@ export function ProvidersPage() {
       projectName: p.projectName ?? '',
       panelId: p.panelId ?? '',
       isPostpaid: p.isPostpaid,
+      manualBalance: p.manualBalance,
+      balance: p.balance ?? '',
+      balanceCurrency: p.balanceCurrency ?? settings?.baseCurrency ?? 'RUB',
       useCatalogNames: p.useCatalogNames !== false,
     });
     setDetailUuid(p.uuid);
@@ -109,6 +112,14 @@ export function ProvidersPage() {
     const icon = iconName
       ? { iconName, iconBg: v.iconBg || DEFAULT_ICON_BG }
       : { iconName: null as string | null, iconBg: null as string | null };
+    // Balance fields travel only when they changed: re-sending the same number would reset the
+    // accrual point (balanceSyncedAt) on every unrelated edit, e.g. a rename.
+    const dirty = form.formState.dirtyFields;
+    const balanceTouched = Boolean(dirty.balance || dirty.balanceCurrency || dirty.manualBalance);
+    const balanceFields =
+      v.manualBalance && (balanceTouched || !selected)
+        ? { balance: trimMoney(v.balance), balanceCurrency: v.balanceCurrency }
+        : {};
     try {
       let saved: Provider;
       if (selected) {
@@ -119,6 +130,8 @@ export function ProvidersPage() {
             loginUrl: v.loginUrl || undefined,
             ...icon,
             isPostpaid: v.isPostpaid,
+            manualBalance: v.manualBalance,
+            ...balanceFields,
             ...creds,
           },
         });
@@ -130,6 +143,8 @@ export function ProvidersPage() {
           loginUrl: v.loginUrl || undefined,
           ...(iconName ? { iconName, iconBg: v.iconBg || DEFAULT_ICON_BG } : {}),
           isPostpaid: v.isPostpaid,
+          manualBalance: v.manualBalance,
+          ...balanceFields,
           ...creds,
         });
         closeCreateModal();

@@ -19,6 +19,7 @@ import { FaviconsService } from '../favicons/favicons.service';
 import { ConnectorFactory } from '@connectors/connector.factory';
 import { PaymentData, ServiceData } from '@connectors/connector.interface';
 import { mapSyncRun } from '@common/mappers';
+import { BalanceAccrualService } from './balance-accrual.service';
 
 const SYNC_TIMEOUT_MS = 120_000;
 const SYNC_INTERVAL_NAME = 'provider-sync';
@@ -47,6 +48,7 @@ export class SyncService implements OnModuleInit {
     private readonly favicons: FaviconsService,
     private readonly connectors: ConnectorFactory,
     private readonly scheduler: SchedulerRegistry,
+    private readonly accrual: BalanceAccrualService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -83,7 +85,7 @@ export class SyncService implements OnModuleInit {
     this.logger.log(`Provider autosync every ${hours}h`);
   }
 
-  /** Sync every non-manual provider; failures are isolated. */
+  /** Sync every non-manual provider (failures isolated), then drain hand-maintained balances. */
   async syncAllProviders(): Promise<void> {
     const providers = await this.providers.listSyncable();
     for (const p of providers) {
@@ -96,12 +98,14 @@ export class SyncService implements OnModuleInit {
         );
       }
     }
+    await this.accrual.accrueAll();
   }
 
   /** Manually sync every non-manual provider in parallel; returns a summary for the UI. */
   async syncAll(): Promise<{ total: number; ok: number; failed: number }> {
     const providers = await this.providers.listSyncable();
     const results = await Promise.allSettled(providers.map((p) => this.syncProvider(p.uuid)));
+    await this.accrual.accrueAll();
     let ok = 0;
     let failed = 0;
     for (const r of results) {
@@ -148,8 +152,9 @@ export class SyncService implements OnModuleInit {
         controller.signal,
         () => connector.fetchAccount(controller.signal),
       );
-      // Some providers (e.g. Hetzner) expose no account balance → skip balance/snapshot.
-      if (account.balance !== null) {
+      // Some providers (e.g. Hetzner) expose no account balance → skip balance/snapshot. A
+      // hand-maintained balance is owned by the accrual, not the connector.
+      if (account.balance !== null && !provider.manualBalance) {
         const balance = account.balance.toFixed(2);
         await this.providers.updateBalance(uuid, balance, account.currency);
         await this.snapshots.record(uuid, balance, account.currency);

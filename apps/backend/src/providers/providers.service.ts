@@ -5,7 +5,9 @@ import {
   ProviderCredentialsReveal,
   Service as ServiceDto,
   YandexDiscoverResult,
+  providerKindAllowsManualBalance,
 } from '@infra/shared';
+import { BalanceSnapshotsRepository } from '@repositories/balance-snapshots/balance-snapshots.repository';
 import { ProvidersRepository } from '@repositories/providers/providers.repository';
 import {
   AEZA_BASE_URLS,
@@ -34,6 +36,7 @@ export class ProvidersService {
     private readonly providers: ProvidersRepository,
     private readonly crypto: CryptoService,
     private readonly favicons: FaviconsService,
+    private readonly snapshots: BalanceSnapshotsRepository,
   ) {}
 
   async list(): Promise<ProviderDto[]> {
@@ -246,6 +249,8 @@ export class ProvidersService {
   }
 
   async create(dto: CreateProviderDto): Promise<ProviderDto> {
+    this.assertManualBalance(dto.kind, dto, false);
+    const manualBalance = dto.manualBalance ?? false;
     const p = await this.providers.create({
       name: dto.name,
       kind: dto.kind,
@@ -253,27 +258,70 @@ export class ProvidersService {
       iconName: dto.iconName ?? null,
       iconBg: dto.iconBg ?? null,
       isPostpaid: dto.isPostpaid ?? false,
+      manualBalance,
+      ...(manualBalance && dto.balance !== undefined
+        ? {
+            balance: dto.balance,
+            balanceCurrency: dto.balanceCurrency,
+            balanceSyncedAt: new Date(),
+          }
+        : {}),
       credentialsEnc: this.buildCredentials(dto.kind, dto),
     });
+    if (manualBalance && dto.balance !== undefined && dto.balanceCurrency) {
+      await this.snapshots.record(p.uuid, dto.balance, dto.balanceCurrency);
+    }
     return this.withCredentialHints(mapProvider(p), p.kind, p.credentialsEnc);
   }
 
   async update(uuid: string, dto: UpdateProviderDto): Promise<ProviderDto> {
     const existing = await this.providers.findCredentials(uuid);
     if (!existing) throw new NotFoundException('Provider not found');
+    this.assertManualBalance(existing.kind, dto, existing.manualBalance);
     const data: Prisma.ProviderUpdateInput = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.loginUrl !== undefined) data.loginUrl = dto.loginUrl;
     if (dto.iconName !== undefined) data.iconName = dto.iconName;
     if (dto.iconBg !== undefined) data.iconBg = dto.iconBg;
     if (dto.isPostpaid !== undefined) data.isPostpaid = dto.isPostpaid;
+    if (dto.manualBalance !== undefined) data.manualBalance = dto.manualBalance;
+    if (dto.manualBalance === false) {
+      data.balance = null;
+      data.balanceCurrency = null;
+      data.balanceSyncedAt = null;
+    } else if (dto.balance !== undefined) {
+      // A hand edit is a new point of truth: the next accrual charges from now.
+      data.balance = dto.balance;
+      data.balanceCurrency = dto.balanceCurrency;
+      data.balanceSyncedAt = new Date();
+    }
     // Merge onto existing credentials so a partial edit works, e.g. adding only a TOTP
     // secret to an existing BILLmanager provider without re-entering the password.
     const creds = this.buildCredentials(existing.kind, dto, existing.credentialsEnc);
     if (creds !== null) data.credentialsEnc = creds;
     const p = await this.providers.update(uuid, data);
+    if (dto.manualBalance !== false && dto.balance !== undefined && dto.balanceCurrency) {
+      await this.snapshots.record(uuid, dto.balance, dto.balanceCurrency);
+    }
     if (dto.loginUrl !== undefined) this.favicons.invalidateProvider(uuid);
     return this.withCredentialHints(mapProvider(p), p.kind, p.credentialsEnc);
+  }
+
+  private assertManualBalance(
+    kind: string,
+    dto: { manualBalance?: boolean; balance?: string; balanceCurrency?: string },
+    storedFlag: boolean,
+  ): void {
+    if (dto.manualBalance && !providerKindAllowsManualBalance(kind)) {
+      throw new BadRequestException('This provider kind reports its balance via API');
+    }
+    if ((dto.balance === undefined) !== (dto.balanceCurrency === undefined)) {
+      throw new BadRequestException('Balance and balance currency must be set together');
+    }
+    const flag = dto.manualBalance ?? storedFlag;
+    if (dto.balance !== undefined && !flag) {
+      throw new BadRequestException('Balance can only be set on a hand-maintained balance');
+    }
   }
 
   async remove(uuid: string): Promise<void> {

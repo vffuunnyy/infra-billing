@@ -199,3 +199,18 @@ export const balancePointSchema = z.object({
   capturedAt: isoDateSchema.describe('Snapshot timestamp'),
 });
 export type BalancePoint = z.infer<typeof balancePointSchema>;
+
+/**
+ * How long one provider's prepaid balance lasts at its current spend (GET /providers/:uuid/runway).
+ * Same burn estimate as the dashboard runway card, but for any provider with a balance, whatever
+ * the severity. Money in the provider's balance currency.
+ */
+export const providerRunwaySchema = z.object({
+  balance: moneySchema.describe('Current balance'),
+  currency: currencySchema.describe('Balance currency'),
+  burnPerDay: moneySchema.describe('Estimated daily spend in balance currency'),
+  daysLeft: z.number().int().describe('Estimated whole days until depletion'),
+  depletionAt: isoDateSchema.describe('Estimated depletion date'),
+  basis: z.enum(['snapshots', 'services']).describe('Burn-rate basis'),
+});
+export type ProviderRunway = z.infer<typeof providerRunwaySchema>;

@@ -23,6 +23,8 @@ export const providerSchema = z.object({
   balanceCurrency: currencySchema.describe('Balance currency').nullable(),
   // Invoice-billed (postpaid): balance is not prepaid funds → excluded from balance warnings.
   isPostpaid: z.boolean().describe('Invoice-billed / postpaid'),
+  // Balance kept by the owner and drained by the panel (hourly/daily services, journal payments).
+  manualBalance: z.boolean().describe('Hand-maintained balance'),
   balanceSyncedAt: isoDateSchema.describe('Balance update time').nullable(),
   lastSyncAt: isoDateSchema.describe('Last successful sync').nullable(),
   lastSyncError: z.string().describe('Last sync error').nullable(),
@@ -90,6 +92,9 @@ export const createProviderSchema = z.object({
   iconName: iconNameSchema.describe('Tabler icon name').optional(),
   iconBg: iconBgSchema.describe('Icon tile background').optional(),
   isPostpaid: z.boolean().describe('Invoice-billed / postpaid').optional(),
+  manualBalance: z.boolean().describe('Hand-maintained balance').optional(),
+  balance: moneySchema.describe('Starting balance').optional(),
+  balanceCurrency: currencySchema.describe('Balance currency').optional(),
   ...credentialFields,
 });
 export type CreateProvider = z.infer<typeof createProviderSchema>;
@@ -100,6 +105,9 @@ export const updateProviderSchema = z.object({
   iconName: iconNameSchema.describe('Tabler icon name').nullable().optional(),
   iconBg: iconBgSchema.describe('Icon tile background').nullable().optional(),
   isPostpaid: z.boolean().describe('Invoice-billed / postpaid').optional(),
+  manualBalance: z.boolean().describe('Hand-maintained balance').optional(),
+  balance: moneySchema.describe('Balance as of now').optional(),
+  balanceCurrency: currencySchema.describe('Balance currency').optional(),
   ...credentialFields,
 });
 export type UpdateProvider = z.infer<typeof updateProviderSchema>;

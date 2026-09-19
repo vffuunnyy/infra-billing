@@ -28,6 +28,7 @@ export function mapProvider(
     balance: decimalToString(p.balance),
     balanceCurrency: p.balanceCurrency,
     isPostpaid: p.isPostpaid,
+    manualBalance: p.manualBalance,
     balanceSyncedAt: dateToIso(p.balanceSyncedAt),
     lastSyncAt: dateToIso(p.lastSyncAt),
     lastSyncError: p.lastSyncError,

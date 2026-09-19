@@ -19,6 +19,9 @@ export interface FormValues {
   apiPassword: string;
   secretKey: string;
   isPostpaid: boolean;
+  manualBalance: boolean;
+  balance: string;
+  balanceCurrency: string;
   useCatalogNames: boolean;
 }
 
@@ -64,6 +67,9 @@ export const EMPTY_FORM: FormValues = {
   apiPassword: '',
   secretKey: '',
   isPostpaid: false,
+  manualBalance: false,
+  balance: '',
+  balanceCurrency: 'RUB',
   useCatalogNames: true,
 };
 

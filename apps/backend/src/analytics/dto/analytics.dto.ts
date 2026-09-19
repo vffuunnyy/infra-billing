@@ -1,10 +1,16 @@
-import { analyticsSummarySchema, balancePointSchema, forecastPointSchema } from '@infra/shared';
+import {
+  analyticsSummarySchema,
+  balancePointSchema,
+  forecastPointSchema,
+  providerRunwaySchema,
+} from '@infra/shared';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 export class AnalyticsSummaryDto extends createZodDto(analyticsSummarySchema) {}
 export class ForecastPointDto extends createZodDto(forecastPointSchema) {}
 export class BalancePointDto extends createZodDto(balancePointSchema) {}
+export class ProviderRunwayDto extends createZodDto(providerRunwaySchema) {}
 
 export const forecastQuerySchema = z.object({
   months: z.coerce.number().int().positive().max(60).default(12),

@@ -82,6 +82,10 @@ export class PaymentsRepository {
     return { rows, total };
   }
 
+  findByUuid(uuid: string) {
+    return this.prisma.payment.findUnique({ where: { uuid } });
+  }
+
   async exists(uuid: string): Promise<boolean> {
     const found = await this.prisma.payment.findUnique({
       where: { uuid },

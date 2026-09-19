@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { AnalyticsSummary, BalancePoint, ForecastPoint } from '@infra/shared';
+import type { AnalyticsSummary, BalancePoint, ForecastPoint, ProviderRunway } from '@infra/shared';
 import { api } from './client';
 import { API_PATH } from '@infra/shared';
 
@@ -19,6 +19,15 @@ export function useForecast(months = 12, monthsBack = 3) {
           params: { months, monthsBack },
         })
       ).data,
+  });
+}
+
+export function useProviderRunway(uuid?: string) {
+  return useQuery({
+    queryKey: ['provider-runway', uuid],
+    enabled: Boolean(uuid),
+    queryFn: async () =>
+      (await api.get<ProviderRunway | null>(API_PATH.PROVIDERS.RUNWAY(uuid!))).data,
   });
 }
 

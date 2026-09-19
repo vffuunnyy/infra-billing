@@ -15,7 +15,8 @@ import {
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { providerFavicon } from '@/utils/favicon';
-import { formatDate, formatMoney } from '@/utils/format';
+import { useProviderRunway } from '@/api/analytics';
+import { formatDate, formatDateShort, formatMoney } from '@/utils/format';
 import { BalanceHistoryChart } from './BalanceHistoryChart';
 import { ProviderFormFields } from './ProviderFormFields';
 import type { FormValues } from './providerForm';
@@ -61,6 +62,7 @@ export function ProviderDetailModal({
   const lastProvider = useRef<Provider | null>(provider);
   if (provider) lastProvider.current = provider;
   const shown = provider ?? lastProvider.current;
+  const { data: runway } = useProviderRunway(provider?.uuid);
   if (shown == null) return null;
 
   return (
@@ -114,8 +116,38 @@ export function ProviderDetailModal({
                 <p className="section-label">{t('providers.detail.infoTitle')}</p>
                 <InfoRow
                   label={t('providers.th.balance')}
-                  value={formatMoney(shown.balance, shown.balanceCurrency)}
+                  value={
+                    <span className="inline-flex items-center gap-1.5">
+                      {formatMoney(shown.balance, shown.balanceCurrency)}
+                      {shown.manualBalance && (
+                        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                          {t('providers.detail.balanceManual')}
+                        </Badge>
+                      )}
+                    </span>
+                  }
                 />
+                {shown.manualBalance && shown.balanceSyncedAt && (
+                  <InfoRow
+                    label={t('providers.detail.accruedAt')}
+                    value={formatDate(shown.balanceSyncedAt)}
+                  />
+                )}
+                {runway && (
+                  <>
+                    <InfoRow
+                      label={t('providers.detail.runway')}
+                      value={t('providers.detail.runwayValue', {
+                        count: runway.daysLeft,
+                        date: formatDateShort(runway.depletionAt),
+                      })}
+                    />
+                    <InfoRow
+                      label={t('providers.detail.burnPerDay')}
+                      value={formatMoney(runway.burnPerDay, runway.currency)}
+                    />
+                  </>
+                )}
                 <InfoRow label={t('providers.detail.services')} value={shown.servicesCount ?? 0} />
                 <InfoRow label={t('providers.detail.payments')} value={shown.paymentsCount ?? 0} />
                 <InfoRow

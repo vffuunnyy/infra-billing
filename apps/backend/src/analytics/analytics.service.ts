@@ -1,7 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import Decimal from 'decimal.js';
 import dayjs from 'dayjs';
-import { AnalyticsSummary, BalancePoint, ForecastPoint, Period, ProjectStats } from '@infra/shared';
+import { Prisma } from '@generated/prisma/client';
+import {
+  AnalyticsSummary,
+  BalancePoint,
+  ForecastPoint,
+  Period,
+  ProjectStats,
+  ProviderRunway,
+} from '@infra/shared';
 import { BalanceSnapshotsRepository } from '@repositories/balance-snapshots/balance-snapshots.repository';
 import { PaymentsRepository } from '@repositories/payments/payments.repository';
 import { ProjectsRepository } from '@repositories/projects/projects.repository';
@@ -299,34 +307,15 @@ export class AnalyticsService {
       if (p.isPostpaid) continue; // invoice-billed → balance isn't prepaid funds
       if (datedProviderUuids.has(p.uuid)) continue;
       const balance = new Decimal(p.balance.toString());
-
-      // Primary: actual decline measured from snapshots (in the provider's balance currency).
-      const points = (snapsByProvider.get(p.uuid) ?? [])
-        .filter((snap) => snap.currency === p.balanceCurrency)
-        .map((snap) => ({
-          balance: new Decimal(snap.balance.toString()),
-          capturedAt: snap.capturedAt,
-        }));
-      let burn = burnFromSnapshots(points);
-      let basis: 'snapshots' | 'services' = 'snapshots';
-      if (burn == null) {
-        // Fallback: sum the provider's active services' monthly cost in the balance currency.
-        let monthly = ZERO();
-        for (const s of services) {
-          if (s.providerUuid !== p.uuid) continue;
-          monthly = monthly.add(
-            this.currency.convert(
-              monthlyCost(new Decimal(s.cost.toString()), s.period as Period),
-              s.currency,
-              p.balanceCurrency,
-              rates,
-            ),
-          );
-        }
-        burn = burnFromMonthlyCost(monthly);
-        basis = 'services';
-      }
-      if (burn == null) continue; // no measurable spend → can't estimate
+      const est = this.estimateBurn(
+        p.uuid,
+        p.balanceCurrency,
+        services,
+        p.manualBalance ? [] : (snapsByProvider.get(p.uuid) ?? []),
+        rates,
+      );
+      if (est == null) continue; // no measurable spend → can't estimate
+      const { burn, basis } = est;
 
       const daysLeft = daysOfRunway(balance, burn);
       let severity: 'critical' | 'warning' | 'ok';
@@ -579,6 +568,77 @@ export class AnalyticsService {
       estimated: estimatedBuckets.get(m)!.toFixed(2),
       projected: projBuckets.get(m)!.toFixed(2),
     }));
+  }
+
+  /**
+   * Daily burn for one provider in its balance currency. Primary: actual decline measured from
+   * snapshots. Fallback: the provider's active services' monthly cost. Null when neither yields a
+   * positive spend.
+   *
+   * Callers pass no snapshots for a hand-maintained balance: its history is written by the panel
+   * itself (accrual, journal payments, hand edits), and a deleted top-up or a corrected number
+   * would read as spend.
+   */
+  private estimateBurn(
+    providerUuid: string,
+    balanceCurrency: string,
+    services: { providerUuid: string; cost: Prisma.Decimal; currency: string; period: string }[],
+    snapshots: { currency: string; balance: Prisma.Decimal; capturedAt: Date }[],
+    rates: Map<string, Decimal>,
+  ): { burn: Decimal; basis: 'snapshots' | 'services' } | null {
+    const points = snapshots
+      .filter((snap) => snap.currency === balanceCurrency)
+      .map((snap) => ({
+        balance: new Decimal(snap.balance.toString()),
+        capturedAt: snap.capturedAt,
+      }));
+    const fromSnapshots = burnFromSnapshots(points);
+    if (fromSnapshots != null) return { burn: fromSnapshots, basis: 'snapshots' };
+    let monthly = ZERO();
+    for (const s of services) {
+      if (s.providerUuid !== providerUuid) continue;
+      monthly = monthly.add(
+        this.currency.convert(
+          monthlyCost(new Decimal(s.cost.toString()), s.period as Period),
+          s.currency,
+          balanceCurrency,
+          rates,
+        ),
+      );
+    }
+    const fromServices = burnFromMonthlyCost(monthly);
+    return fromServices == null ? null : { burn: fromServices, basis: 'services' };
+  }
+
+  /** Runway of one provider at its current spend; null without a prepaid balance or measurable spend. */
+  async providerRunway(uuid: string): Promise<ProviderRunway | null> {
+    const provider = await this.providersRepo.findByUuid(uuid);
+    if (!provider) throw new NotFoundException('Provider not found');
+    if (provider.balance == null || !provider.balanceCurrency || provider.isPostpaid) return null;
+    const now = dayjs();
+    const [services, snapshots, rates] = await Promise.all([
+      this.servicesRepo.listActive(),
+      this.snapshotsRepo.listForProvider(uuid, now.subtract(30, 'day').toDate()),
+      this.currency.getRubRates(),
+    ]);
+    const est = this.estimateBurn(
+      uuid,
+      provider.balanceCurrency,
+      services,
+      provider.manualBalance ? [] : snapshots,
+      rates,
+    );
+    if (est == null) return null;
+    const balance = new Decimal(provider.balance.toString());
+    const daysLeft = daysOfRunway(balance, est.burn);
+    return {
+      balance: balance.toFixed(2),
+      currency: provider.balanceCurrency,
+      burnPerDay: est.burn.toFixed(2),
+      daysLeft,
+      depletionAt: now.add(daysLeft, 'day').toISOString(),
+      basis: est.basis,
+    };
   }
 
   async balanceHistory(uuid: string, from?: Date, to?: Date): Promise<BalancePoint[]> {
