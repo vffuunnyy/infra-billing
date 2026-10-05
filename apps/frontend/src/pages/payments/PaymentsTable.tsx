@@ -1,6 +1,7 @@
-import type { Payment, Provider } from '@infra/shared';
+import type { Payment, Provider, Service } from '@infra/shared';
 import { IconTrash } from '@tabler/icons-react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { EntityLabel } from '@/components/EntityLabel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,16 +14,67 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import {
+  LOCATED_TYPES,
+  ServiceTypeIcon,
+  serviceTypeMarker,
+  serviceTypeMarkerBg,
+  serviceTypeModel,
+} from '@/pages/services/ServiceTypeIcon';
 import { providerFavicon } from '@/utils/favicon';
-import { formatDateShort, formatMoney } from '@/utils/format';
+import { countryFlag, formatDateShort, formatMoney, truncate } from '@/utils/format';
+
+const SERVICE_NAME_MAX_LENGTH = 40;
 
 interface PaymentsTableProps {
   payments: Payment[];
   isLoading: boolean;
   total: number;
   providerOf: (uuid: string) => Provider | undefined;
+  serviceOf: (uuid: string) => Service | undefined;
   // Absent for members without payments:edit — the delete column renders empty.
   onDelete?: (uuid: string) => void;
+}
+
+// Same lead as the services table (flag for located types, type icon otherwise); links to the
+// service card through the ?selected= deep link.
+function ServiceLabel({ service }: { service: Service }) {
+  const name =
+    service.name.length > SERVICE_NAME_MAX_LENGTH ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span>{truncate(service.name, SERVICE_NAME_MAX_LENGTH)}</span>
+        </TooltipTrigger>
+        <TooltipContent>{service.name}</TooltipContent>
+      </Tooltip>
+    ) : (
+      <span>{service.name}</span>
+    );
+  return (
+    <Link
+      to={`/services?selected=${service.uuid}`}
+      className={cn(
+        'inline-flex items-center gap-1.5 hover:underline',
+        !service.isActive && 'opacity-50',
+      )}
+    >
+      {LOCATED_TYPES.has(service.type) ? (
+        <span className="inline-flex size-[18px] shrink-0 items-center justify-center text-[15px] leading-none">
+          {countryFlag(service.countryCode)}
+        </span>
+      ) : (
+        <ServiceTypeIcon
+          type={service.type}
+          model={serviceTypeModel(service.meta)}
+          marker={serviceTypeMarker(service.meta)}
+          markerBg={serviceTypeMarkerBg(service.meta)}
+        />
+      )}
+      {name}
+    </Link>
+  );
 }
 
 export function PaymentsTable({
@@ -30,17 +82,19 @@ export function PaymentsTable({
   isLoading,
   total,
   providerOf,
+  serviceOf,
   onDelete,
 }: PaymentsTableProps) {
   const { t } = useTranslation();
   return (
     <Card className="overflow-hidden py-0">
       <div className="overflow-x-auto">
-        <Table className="min-w-[720px] [&_td]:py-3">
+        <Table className="min-w-[880px] [&_td]:py-3">
           <TableHeader>
             <TableRow className="[&_th]:text-muted-foreground">
               <TableHead>{t('payments.colDate')}</TableHead>
               <TableHead>{t('payments.colProvider')}</TableHead>
+              <TableHead>{t('payments.colService')}</TableHead>
               <TableHead>{t('payments.colType')}</TableHead>
               <TableHead>{t('payments.colAmount')}</TableHead>
               <TableHead>{t('payments.colDescription')}</TableHead>
@@ -50,6 +104,7 @@ export function PaymentsTable({
           <TableBody>
             {payments.map((p) => {
               const provider = providerOf(p.providerUuid);
+              const service = p.serviceUuid ? serviceOf(p.serviceUuid) : undefined;
               return (
                 <TableRow key={p.uuid}>
                   <TableCell>{formatDateShort(p.paymentDate)}</TableCell>
@@ -60,6 +115,14 @@ export function PaymentsTable({
                       iconName={provider?.iconName}
                       iconBg={provider?.iconBg}
                     />
+                  </TableCell>
+                  <TableCell>
+                    {/* An attributed payment stays blank until the services list loads. */}
+                    {p.serviceUuid === null ? (
+                      <span className="text-muted-foreground">{t('common.none')}</span>
+                    ) : (
+                      service && <ServiceLabel service={service} />
+                    )}
                   </TableCell>
                   <TableCell>
                     {p.type === 'charge' ? (
@@ -98,7 +161,7 @@ export function PaymentsTable({
             })}
             {!isLoading && total === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-6 text-center text-muted-foreground">
                   {t('payments.empty')}
                 </TableCell>
               </TableRow>

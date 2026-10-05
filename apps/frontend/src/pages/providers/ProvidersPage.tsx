@@ -17,6 +17,7 @@ import { useRates } from '@/api/rates';
 import { useSettings } from '@/api/settings';
 import { can, isAdmin } from '@/auth/permissions';
 import { PageHeader } from '@/components/PageHeader';
+import { ResetViewButton } from '@/components/ResetViewButton';
 import { Button } from '@/components/ui/button';
 import { useEnums } from '@/constants';
 import { useDisclosure } from '@/hooks/useDisclosure';
@@ -57,7 +58,7 @@ export function ProvidersPage() {
   const selected = providers?.find((p) => p.uuid === detailUuid) ?? null;
   const [createOpened, { open: openCreateModal, close: closeCreateModal }] = useDisclosure(false);
 
-  const { sort, toggleSort } = useTableSort('providers-sort', PROVIDER_SORT_KEYS);
+  const { sort, toggleSort, resetSort } = useTableSort('providers-sort', PROVIDER_SORT_KEYS);
   const sorted = sortRows(
     providers,
     sort,
@@ -209,6 +210,7 @@ export function ProvidersPage() {
           subtitle={t('providers.subtitle')}
           actions={
             <>
+              {sort && <ResetViewButton onClick={resetSort} />}
               {isAdminUser && (
                 <Button variant="outline" disabled={syncAll.isPending} onClick={doSyncAll}>
                   {syncAll.isPending ? (

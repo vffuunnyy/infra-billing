@@ -20,6 +20,11 @@ infra-billing.tar.gz
 *.log
 .DS_Store
 
+# playwright (MCP browser screenshots/logs, test runner output)
+.playwright-mcp/
+test-results/
+playwright-report/
+
 # README capture intermediates (keep framed *.webp)
 docs/screenshot-*.raw.png
 

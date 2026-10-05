@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useMe } from '@/api/auth';
 import { apiErrorMessage } from '@/api/client';
 import {
+  parsePaymentFilter,
   type PaymentFilter,
   useCreatePayment,
   useDeletePayment,
@@ -18,6 +19,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { useEnums } from '@/constants';
 import { useDisclosure } from '@/hooks/useDisclosure';
+import { isStaleUuid, usePersistedState } from '@/hooks/usePersistedState';
 import { trimMoney } from '@/utils/format';
 import { notifyError, notifySuccess } from '@/utils/notify';
 import { PaymentFormModal } from './PaymentFormModal';
@@ -35,7 +37,11 @@ export function PaymentsPage() {
   const canReadProviders = can(me.data, 'providers:read');
   const canReadServices = can(me.data, 'services:read');
   const { data: providers } = useProviders({ enabled: canReadProviders });
-  const [filter, setFilterState] = useState<PaymentFilter>({});
+  const [filter, setFilterState] = usePersistedState<PaymentFilter>(
+    'payments-filter',
+    parsePaymentFilter,
+    {},
+  );
   const [rawPage, setRawPage] = useState(1);
   // A new filter always lands on page 1 — reset in the same event that changes the filter, so we
   // never fetch the old page against the new filter (the old effect chain did exactly that).
@@ -43,6 +49,10 @@ export function PaymentsPage() {
     setFilterState(update);
     setRawPage(1);
   };
+  // A saved filter may name a provider deleted since; adjust during render (like the page clamp
+  // below) so a blank Select over an empty journal is never committed. Loading lists keep the value.
+  if (isStaleUuid(filter.providerUuid, providers))
+    setFilter((f) => ({ ...f, providerUuid: undefined }));
   const { data, isLoading } = usePayments(filter, { page: rawPage, pageSize: PAGE_SIZE });
   const payments = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -58,6 +68,8 @@ export function PaymentsPage() {
 
   const providerOptions = (providers ?? []).map((p) => ({ value: p.uuid, label: p.name }));
   const providerOf = (uuid: string) => providers?.find((p) => p.uuid === uuid);
+  const { data: services } = useServices();
+  const serviceOf = (uuid: string) => services?.find((s) => s.uuid === uuid);
 
   const form = useForm<PForm>({
     defaultValues: {
@@ -140,6 +152,7 @@ export function PaymentsPage() {
         isLoading={isLoading}
         total={total}
         providerOf={providerOf}
+        serviceOf={serviceOf}
         onDelete={canEdit ? doDelete : undefined}
       />
 
