@@ -336,7 +336,8 @@ export class AnalyticsService {
         const est = this.estimateBurn(
           p.uuid,
           p.balanceCurrency,
-          scopedServices,
+          // The balance is shared across projects; only the emitted provider rows are scoped.
+          services,
           p.manualBalance ? [] : (snapsByProvider.get(p.uuid) ?? []),
           rates,
         );
