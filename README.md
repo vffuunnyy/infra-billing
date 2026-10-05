@@ -303,6 +303,9 @@ curl -H "Authorization: Bearer ib_…" https://infra-billing/api/providers
 
 ## Локальная разработка
 
+Поиск и анализ кода через Pugra: [настройка и команды](docs/pugra.md),
+например `npm run pugra -- find TelegramService`.
+
 ```bash
 make install            # npm ci
 make db-up              # поднять только Postgres (127.0.0.1:5432)

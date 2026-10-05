@@ -1,0 +1,20 @@
+# Repository-local code navigation. SQL migrations and Prisma schemas remain searchable.
+[index]
+exclude = [
+  "**/node_modules/**",
+  "**/dist/**",
+  "apps/backend/src/generated/**",
+  ".claude/**",
+  "coverage/**",
+  "playwright-report/**",
+  "test-results/**",
+  "**/*.tsbuildinfo",
+  ".env",
+  ".env.*",
+]
+# Keep vendored UI primitives searchable, but omit their callers from refs by default.
+external = [
+  "apps/frontend/src/components/ui/**",
+  "apps/frontend/src/components/remocn/**",
+  "apps/frontend/src/lib/remocn-ui/**",
+]
