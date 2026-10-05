@@ -8,6 +8,7 @@ import { ExchangeRatesDailyRepository } from './exchange-rates-daily/exchange-ra
 import { NotificationLogRepository } from './notification-log/notification-log.repository';
 import { PasskeysRepository } from './passkeys/passkeys.repository';
 import { PaymentsRepository } from './payments/payments.repository';
+import { ProjectNotificationSettingsRepository } from './project-notification-settings/project-notification-settings.repository';
 import { ProjectsRepository } from './projects/projects.repository';
 import { ProvidersRepository } from './providers/providers.repository';
 import { ServicesRepository } from './services/services.repository';
@@ -25,6 +26,7 @@ const REPOSITORIES = [
   PasskeysRepository,
   PaymentsRepository,
   ProjectsRepository,
+  ProjectNotificationSettingsRepository,
   ProvidersRepository,
   ServicesRepository,
   SettingsRepository,

@@ -1,0 +1,14 @@
+model ProjectNotificationSettings {
+  projectUuid String @id @map("project_uuid")
+
+  notificationsEnabled Boolean @default(false) @map("notifications_enabled")
+  upcomingBillingDays  Int     @default(3) @map("upcoming_billing_days")
+  telegramBotTokenEnc  Bytes?  @map("telegram_bot_token_enc")
+  telegramChatId       String? @map("telegram_chat_id")
+  telegramTopicId      String? @map("telegram_topic_id")
+  telegramProxyUrl     String? @map("telegram_proxy_url")
+
+  project Project @relation(fields: [projectUuid], references: [uuid], onDelete: Cascade)
+
+  @@map("project_notification_settings")
+}

@@ -11,6 +11,7 @@ model Project {
 
   services Service[]
   accounts AccountProject[]
+  notificationSettings ProjectNotificationSettings?
 
   @@map("projects")
 }

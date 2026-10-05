@@ -4,7 +4,7 @@ model Settings {
   syncIntervalHours Int    @default(6) @map("sync_interval_hours")
   rateSource        String @default("cbr") @map("rate_source")
 
-  // Telegram notifications (managed in-panel). Token is AES-GCM encrypted, never returned by API.
+  // Legacy Telegram configuration, retained for rollback. Delivery uses ProjectNotificationSettings.
   notificationsEnabled Boolean @default(false) @map("notifications_enabled")
   upcomingBillingDays  Int     @default(3) @map("upcoming_billing_days")
   telegramBotTokenEnc  Bytes?  @map("telegram_bot_token_enc")

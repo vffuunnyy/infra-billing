@@ -9,6 +9,7 @@ export * from './schemas/project';
 export * from './schemas/service';
 export * from './schemas/payment';
 export * from './schemas/settings';
+export * from './schemas/telegram-settings';
 export * from './schemas/rate';
 export * from './schemas/sync';
 export * from './schemas/analytics';

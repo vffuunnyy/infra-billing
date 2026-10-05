@@ -62,8 +62,9 @@ export const API_SUB = {
   ANALYTICS_FORECAST: 'forecast',
   RATES_REFRESH: 'refresh',
   RATES_BACKFILL: 'backfill',
-  NOTIFICATIONS_CHECK: 'check',
-  NOTIFICATIONS_TEST: 'test',
+  SETTINGS_TELEGRAM: `telegram/${ID}`,
+  NOTIFICATIONS_CHECK: `check/${ID}`,
+  NOTIFICATIONS_TEST: `test/${ID}`,
   // Invite/reset one-time links. Static-prefixed ('invite/…', 'invites') — the controller must
   // declare these before the `:uuid` routes so Express doesn't try to match 'invites' as a uuid.
   ACCOUNT_INVITES: 'invites',
@@ -135,9 +136,10 @@ export const API_PATH = {
     BACKFILL: path(API.RATES, API_SUB.RATES_BACKFILL),
   },
   SETTINGS: path(API.SETTINGS),
+  TELEGRAM_SETTINGS: (uuid: string) => pathId(API.SETTINGS, API_SUB.SETTINGS_TELEGRAM, uuid),
   NOTIFICATIONS: {
-    CHECK: path(API.NOTIFICATIONS, API_SUB.NOTIFICATIONS_CHECK),
-    TEST: path(API.NOTIFICATIONS, API_SUB.NOTIFICATIONS_TEST),
+    CHECK: (uuid: string) => pathId(API.NOTIFICATIONS, API_SUB.NOTIFICATIONS_CHECK, uuid),
+    TEST: (uuid: string) => pathId(API.NOTIFICATIONS, API_SUB.NOTIFICATIONS_TEST, uuid),
   },
   TOKENS: {
     ROOT: path(API.TOKENS),

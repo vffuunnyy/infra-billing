@@ -29,7 +29,6 @@ apps/backend/src/generated/
 # local database dumps
 backups/
 
-# tests
-apps/backend/test/
+# Backend regression tests are checked in.
 .claude/
 CLAUDE.md

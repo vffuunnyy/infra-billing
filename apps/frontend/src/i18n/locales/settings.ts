@@ -30,6 +30,10 @@ export const settings = {
     },
     telegram: {
       title: 'Telegram notifications',
+      project: 'Project',
+      projectDescription:
+        'These settings send notifications only for the selected project. Each project has its own bot, chat and topic.',
+      loadFailed: 'Could not load notification settings. Reload the page.',
       tokenSet: 'token set',
       notConfigured: 'not configured',
       enabled: 'Notifications enabled',
@@ -107,6 +111,10 @@ export const settings = {
     },
     telegram: {
       title: 'Telegram-уведомления',
+      project: 'Проект',
+      projectDescription:
+        'Эти настройки отправляют уведомления только о выбранном проекте. У каждого проекта свои бот, чат и топик.',
+      loadFailed: 'Не удалось загрузить настройки уведомлений. Обновите страницу.',
       tokenSet: 'токен задан',
       notConfigured: 'не настроен',
       enabled: 'Уведомления включены',

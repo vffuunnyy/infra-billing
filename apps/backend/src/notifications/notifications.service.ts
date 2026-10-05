@@ -2,10 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import dayjs from 'dayjs';
 import { NotificationLogRepository } from '@repositories/notification-log/notification-log.repository';
-import { SettingsRepository } from '@repositories/settings/settings.repository';
+import { ProjectNotificationSettingsRepository } from '@repositories/project-notification-settings/project-notification-settings.repository';
+import { ServicesRepository } from '@repositories/services/services.repository';
 import { SyncRunsRepository } from '@repositories/sync-runs/sync-runs.repository';
 import { AnalyticsService } from '../analytics/analytics.service';
 import {
+  esc,
   lowBalanceMessage,
   lowRunwayMessage,
   overdueBillingMessage,
@@ -17,88 +19,112 @@ import {
 import { TelegramService } from './telegram.service';
 
 const THROTTLE_HOURS = 24;
-const DEFAULT_UPCOMING_BILLING_DAYS = 3; // fallback only, until the Settings row exists
 
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
   constructor(
-    private readonly settings: SettingsRepository,
+    private readonly settings: ProjectNotificationSettingsRepository,
     private readonly syncRuns: SyncRunsRepository,
     private readonly notificationLog: NotificationLogRepository,
     private readonly analytics: AnalyticsService,
     private readonly telegram: TelegramService,
+    private readonly services: ServicesRepository,
   ) {}
 
-  /** Evaluate alert conditions and send (throttled) Telegram messages. Returns count sent. */
-  async checkAndNotify(): Promise<number> {
-    if (!(await this.telegram.isEnabled())) return 0;
+  /** Scheduled checks cover enabled projects; manual checks require a specific project. */
+  async checkAndNotify(projectUuid?: string): Promise<number> {
+    const configs = projectUuid
+      ? [await this.settings.find(projectUuid)]
+      : await this.settings.listEnabled();
+    let sent = 0;
+    for (const config of configs) {
+      if (!config?.notificationsEnabled) continue;
+      try {
+        if (!(await this.telegram.isEnabled(config.projectUuid))) continue;
+        sent += await this.checkProject(
+          config.projectUuid,
+          config.project.name,
+          config.upcomingBillingDays,
+        );
+      } catch {
+        this.logger.error(`Notification check failed for project ${config.projectUuid}`);
+      }
+    }
+    if (sent > 0) this.logger.log(`Notifications sent: ${sent}`);
+    return sent;
+  }
 
-    const settings = await this.settings.find();
-    const upcomingDays = settings?.upcomingBillingDays ?? DEFAULT_UPCOMING_BILLING_DAYS;
-    const summary = await this.analytics.summary();
+  private async checkProject(
+    projectUuid: string,
+    projectName: string,
+    upcomingDays: number,
+  ): Promise<number> {
+    const summary = await this.analytics.summary({
+      projectUuids: [projectUuid],
+      explicitFilter: true,
+      includeBalances: true,
+      includePayments: false,
+    });
+    const send = (key: string, html: string) => this.maybeSend(projectUuid, projectName, key, html);
     let sent = 0;
 
-    // 1) Critical upcoming charges (same definition as the dashboard plate). covered=false →
-    //    the balance won't cover it; covered=null → the panel can't see a balance (manual kind /
-    //    no balance API) — honest "go check the cabinet" alert instead of a fake balance claim.
     for (const ub of summary.upcomingBillings) {
       if (ub.severity !== 'critical') continue;
       const unknown = ub.covered === null;
       const html = unknown ? unknownCoverageMessage(ub) : lowBalanceMessage(ub);
       const key = unknown ? `unknown-coverage:${ub.serviceUuid}` : `low-balance:${ub.serviceUuid}`;
-      if (await this.maybeSend(key, html)) sent += 1;
+      if (await send(key, html)) sent += 1;
     }
-
-    // 1b) Low runway: a prepaid provider (no dated charge) whose balance is estimated to drain
-    //     within ~3 days (severity "critical": same threshold as the dashboard runway card).
     for (const r of summary.balanceRunway) {
       if (r.severity !== 'critical') continue;
-      const html = lowRunwayMessage(r);
-      if (await this.maybeSend(`runway:${r.providerUuid}`, html)) sent += 1;
+      if (await send(`runway:${r.providerUuid}`, lowRunwayMessage(r))) sent += 1;
     }
-
-    // 1c) Overdue: the billing date already passed. Dedup key has no date part, so like the
-    //     low-balance alert it repeats daily (24h throttle) until paid or the date moves forward.
     for (const ob of summary.overdueBillings) {
-      const html = overdueBillingMessage(ob);
-      if (await this.maybeSend(`overdue:${ob.serviceUuid}`, html)) sent += 1;
+      if (await send(`overdue:${ob.serviceUuid}`, overdueBillingMessage(ob))) sent += 1;
     }
 
-    // 2) Upcoming billings within N days.
     const horizon = dayjs().add(upcomingDays, 'day');
     for (const ub of summary.upcomingBillings) {
       if (dayjs(ub.nextBillingAt).isAfter(horizon)) continue;
       const day = dayjs(ub.nextBillingAt).format('YYYY-MM-DD');
-      const html = upcomingBillingMessage(ub, day);
-      if (await this.maybeSend(`upcoming:${ub.serviceUuid}:${day}`, html)) sent += 1;
+      if (await send(`upcoming:${ub.serviceUuid}:${day}`, upcomingBillingMessage(ub, day)))
+        sent += 1;
     }
 
-    // 3) Sync errors in the last 24h (one per provider).
+    // Providers are shared. Only notify projects with active services on the failing provider.
+    const activeServices = await this.services.listActiveByProject(projectUuid);
+    const providers = new Set(activeServices.map((s) => s.providerUuid));
     const since = dayjs().subtract(THROTTLE_HOURS, 'hour').toDate();
     const errorRuns = await this.syncRuns.listErrorsSince(since);
     const seenProviders = new Set<string>();
     for (const run of errorRuns) {
-      if (seenProviders.has(run.providerUuid)) continue;
+      if (!providers.has(run.providerUuid) || seenProviders.has(run.providerUuid)) continue;
       seenProviders.add(run.providerUuid);
       const html = syncErrorMessage(
         run.provider.name,
         run.error ?? 'unknown error',
         run.provider.loginUrl,
       );
-      if (await this.maybeSend(`sync-error:${run.providerUuid}`, html)) sent += 1;
+      if (await send(`sync-error:${run.providerUuid}`, html)) sent += 1;
     }
-
-    if (sent > 0) this.logger.log(`Notifications sent: ${sent}`);
     return sent;
   }
 
-  /** Send one sample of every notification type to preview formats. Ignores throttling. */
-  async sendSamples(): Promise<number> {
+  /** Test sends ignore the enabled switch, but use only this project's saved destination. */
+  async sendSamples(projectUuid: string): Promise<number> {
+    const config = await this.settings.find(projectUuid);
+    if (!config) return 0;
     let sent = 0;
     for (const html of sampleMessages()) {
-      if (await this.telegram.send(html)) sent += 1;
+      if (
+        await this.telegram.send(
+          `<b>Проект: ${esc(config.project.name)}</b>\n\n${html}`,
+          projectUuid,
+        )
+      )
+        sent += 1;
     }
     return sent;
   }
@@ -107,16 +133,25 @@ export class NotificationsService {
   async scheduled(): Promise<void> {
     try {
       await this.checkAndNotify();
-    } catch (e) {
-      this.logger.error('Notification check failed', e instanceof Error ? e.stack : String(e));
+    } catch {
+      this.logger.error('Notification check failed');
     }
   }
 
-  /** Send only if the same dedup key hasn't been sent within THROTTLE_HOURS. */
-  private async maybeSend(dedupKey: string, html: string): Promise<boolean> {
+  private async maybeSend(
+    projectUuid: string,
+    projectName: string,
+    key: string,
+    html: string,
+  ): Promise<boolean> {
+    const dedupKey = `project:${projectUuid}:${key}`;
     const since = dayjs().subtract(THROTTLE_HOURS, 'hour').toDate();
     if (await this.notificationLog.wasSentSince(dedupKey, since)) return false;
-    const ok = await this.telegram.send(html);
+    const ok = await this.telegram.send(
+      `<b>Проект: ${esc(projectName)}</b>\n\n${html}`,
+      projectUuid,
+      true,
+    );
     if (ok) await this.notificationLog.record(dedupKey);
     return ok;
   }
