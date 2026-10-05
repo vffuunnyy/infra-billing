@@ -39,6 +39,39 @@ function fixture() {
   };
 }
 
+test('members cannot change Telegram destinations or trigger manual sends', async () => {
+  const { Reflector } = require('@nestjs/core');
+  const { AuthGuard } = require('../dist/auth/auth.guard');
+  const { TelegramSettingsController } = require('../dist/settings/telegram-settings.controller');
+  const { NotificationsController } = require('../dist/notifications/notifications.controller');
+  const guard = new AuthGuard(
+    { verify: async () => ({ username: 'member', accountUuid: A }) },
+    new Reflector(),
+    {
+      findByUuid: async () => ({
+        uuid: A,
+        username: 'member',
+        disabled: false,
+        permissions: ['services:edit', 'providers:edit', 'payments:edit'],
+        projects: [{ projectUuid: B }],
+      }),
+    },
+  );
+  for (const [controller, method] of [
+    [TelegramSettingsController, 'get'],
+    [TelegramSettingsController, 'update'],
+    [NotificationsController, 'test'],
+    [NotificationsController, 'check'],
+  ]) {
+    const context = {
+      getHandler: () => controller.prototype[method],
+      getClass: () => controller,
+      switchToHttp: () => ({ getRequest: () => ({ cookies: { infra_session: 'test-session' } }) }),
+    };
+    await assert.rejects(guard.canActivate(context), { status: 403 });
+  }
+});
+
 test('saving encrypted token and destination affects only its project; API is write-only', async () => {
   const { rows, crypto, settings } = fixture();
   const result = await settings.update(A, {

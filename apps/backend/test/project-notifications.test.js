@@ -15,11 +15,12 @@ const configs = [A, B, C].map((projectUuid, i) => ({
   telegramTopicId: null,
   telegramProxyUrl: null,
 }));
-function fixture({ failA = false } = {}) {
+function fixture({ failA = false, allAlerts = false, dropFirstA = false } = {}) {
+  let dropped = false;
   const messages = [];
   const log = new Set();
   const settings = {
-    find: async (uuid) => configs.find((c) => c.projectUuid === uuid) ?? configs[0],
+    find: async (uuid) => configs.find((c) => c.projectUuid === uuid) ?? null,
     listEnabled: async () => configs.filter((c) => c.notificationsEnabled),
   };
   const services = [
@@ -38,8 +39,8 @@ function fixture({ failA = false } = {}) {
     cost: '10.00',
     currency: 'USD',
     daysUntil: 3,
-    covered: true,
-    severity: 'ok',
+    covered: allAlerts ? (uuid === A ? false : null) : true,
+    severity: allAlerts ? 'critical' : 'ok',
   }));
   const notifications = new NotificationsService(
     settings,
@@ -57,8 +58,24 @@ function fixture({ failA = false } = {}) {
         upcomingBillings: scope?.projectUuids
           ? upcoming.filter((s) => scope.projectUuids.includes(s.projectUuid))
           : upcoming,
-        overdueBillings: [],
-        balanceRunway: [],
+        overdueBillings: allAlerts
+          ? upcoming
+              .filter((s) => scope.projectUuids.includes(s.projectUuid))
+              .map((s) => ({ ...s, daysOverdue: 3 }))
+          : [],
+        balanceRunway: allAlerts
+          ? [
+              {
+                providerUuid: scope.projectUuids[0] === A ? 'shared' : 'beta-only',
+                providerName: 'Metered host',
+                severity: 'critical',
+                daysLeft: 2,
+                burnPerDay: '5.00',
+                balance: '10.00',
+                currency: 'USD',
+              },
+            ]
+          : [],
       }),
     },
     {
@@ -66,6 +83,10 @@ function fixture({ failA = false } = {}) {
         uuid === undefined || configs.some((c) => c.projectUuid === uuid && c.notificationsEnabled),
       send: async (html, uuid) => {
         if (failA && uuid === A) throw new Error('Alpha delivery failed');
+        if (dropFirstA && uuid === A && !dropped) {
+          dropped = true;
+          return false;
+        }
         messages.push({ html, uuid });
         return true;
       },
@@ -74,6 +95,27 @@ function fixture({ failA = false } = {}) {
   );
   return { notifications, messages, log };
 }
+
+test('low balance, unknown balance, runway and overdue alerts retain project routing', async () => {
+  const { notifications, messages } = fixture({ allAlerts: true });
+  assert.equal(await notifications.checkAndNotify(), 10);
+  const alpha = messages.filter((m) => m.uuid === A);
+  const beta = messages.filter((m) => m.uuid === B);
+  assert.equal(alpha.length, 4);
+  assert.equal(beta.length, 6);
+  for (const label of ['Низкий баланс', 'Запас кончается', 'Просроченное списание'])
+    assert.ok(alpha.some((m) => m.html.includes(label)));
+  assert.ok(beta.some((m) => m.html.includes('Баланс неизвестен')));
+  assert.ok(!alpha.some((m) => m.html.includes('beta')));
+  assert.ok(!beta.some((m) => m.html.includes('alpha-vps')));
+});
+
+test('unsuccessful delivery does not suppress the next retry for that project', async () => {
+  const { notifications, messages } = fixture({ dropFirstA: true });
+  assert.equal(await notifications.checkAndNotify(), 3);
+  assert.equal(await notifications.checkAndNotify(), 1);
+  assert.equal(messages.at(-1).uuid, A);
+});
 
 test('each project receives only its service reminders and relevant provider errors', async () => {
   const { notifications, messages } = fixture();
